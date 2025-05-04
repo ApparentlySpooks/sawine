@@ -1,0 +1,141 @@
+using System;
+using System.IO;
+using System.Net;
+using System.Runtime.InteropServices;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Threading;
+using WMPLib;
+
+class Program
+{
+    [DllImport("user32.dll", SetLastError = true)]
+    static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+
+    [DllImport("user32.dll")]
+    static extern bool SetCursorPos(int X, int Y);
+
+    [DllImport("user32.dll")]
+    static extern IntPtr GetConsoleWindow();
+
+    [DllImport("user32.dll")]
+    static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    const int SPI_SETDESKWALLPAPER = 20;
+    const int SPIF_UPDATEINIFILE = 0x01;
+    const int SPIF_SENDCHANGE = 0x02;
+    const int SW_HIDE = 0;
+
+    static bool keepRunning = true;
+    static string tempFolder = Path.Combine(Path.GetTempPath(), "SawinTemp");
+
+    static void Main()
+    {
+        Console.Write("You want to run sawin? y/n: ");
+        var input = Console.ReadLine();
+
+        if (input?.ToLower() != "y")
+        {
+            Console.WriteLine("Exiting...");
+            return;
+        }
+
+        Directory.CreateDirectory(tempFolder);
+
+        string mp3Url = "https://raw.githubusercontent.com/ApparentlySpooks/sawine/main/sawin.mp3";
+        string mp3Path = Path.Combine(tempFolder, "sawin.mp3");
+
+        Console.WriteLine("Downloading song...");
+        using (var client = new WebClient())
+        {
+            client.DownloadFile(mp3Url, mp3Path);
+        }
+
+        Console.WriteLine("Starting chaos...");
+
+        // Optional: Hide console window after start
+        // var handle = GetConsoleWindow();
+        // ShowWindow(handle, SW_HIDE);
+
+        Thread wallThread = new Thread(RainbowWallpaper);
+        Thread cursorThread = new Thread(CursorSpaz);
+        wallThread.Start();
+        cursorThread.Start();
+
+        try
+        {
+            WindowsMediaPlayer wplayer = new WindowsMediaPlayer();
+            wplayer.URL = mp3Path;
+            wplayer.settings.setMode("loop", true); // loop indefinitely
+            wplayer.controls.play();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Failed to play music: " + ex.Message);
+        }
+
+        Console.WriteLine("Press Ctrl+C or close this window to stop.");
+        while (keepRunning)
+        {
+            Thread.Sleep(100);
+        }
+    }
+
+    static void RainbowWallpaper()
+    {
+        Color[] colors = new Color[]
+        {
+            Color.Red, Color.Orange, Color.Yellow,
+            Color.Green, Color.Blue, Color.Indigo, Color.Violet
+        };
+
+        int i = 0;
+        while (keepRunning)
+        {
+            try
+            {
+                Color color = colors[i % colors.Length];
+                string path = CreateSolidColorWallpaper(color, i);
+                SetWallpaper(path);
+                i++;
+                Thread.Sleep(100); // faster switching
+            }
+            catch { }
+        }
+    }
+
+    static string CreateSolidColorWallpaper(Color color, int index)
+    {
+        int width = 1920, height = 1080;
+        Bitmap bmp = new Bitmap(width, height);
+        using (Graphics g = Graphics.FromImage(bmp))
+        {
+            g.Clear(color);
+        }
+
+        string filePath = Path.Combine(tempFolder, $"wallpaper_{index}.bmp");
+        bmp.Save(filePath, ImageFormat.Bmp);
+        return filePath;
+    }
+
+    static void SetWallpaper(string path)
+    {
+        SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+    }
+
+    static void CursorSpaz()
+    {
+        Random rnd = new Random();
+        int centerX = 960;
+        int centerY = 540;
+
+        while (keepRunning)
+        {
+            int x = centerX + rnd.Next(-500, 500);
+            int y = centerY + rnd.Next(-300, 300);
+            SetCursorPos(x, y);
+            Thread.Sleep(30); // faster movement
+        }
+    }
+}
